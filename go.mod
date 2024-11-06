@@ -1,4 +1,4 @@
-module github.com/ck89119/mysql-mo
+module github.com/ck89119/mysql
 
 go 1.20
 
