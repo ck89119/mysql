@@ -13,7 +13,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"io"
 	"net"
 	"strconv"
@@ -543,7 +542,7 @@ func (mc *mysqlConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver
 }
 
 func (mc *mysqlConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	dargs, err := namedValueToValue(args)
+	dargs, _, err := namedValueToValue(args)
 	if err != nil {
 		return nil, err
 	}
@@ -562,8 +561,8 @@ func (mc *mysqlConn) QueryContext(ctx context.Context, query string, args []driv
 }
 
 func (mc *mysqlConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	dargs, err := namedValueToValue(args)
-	if err != nil && !errors.Is(err, errNotSupportReuseQueryBuf) {
+	dargs, reuseQueryBuf, err := namedValueToValue(args)
+	if err != nil {
 		return nil, err
 	}
 
@@ -572,7 +571,7 @@ func (mc *mysqlConn) ExecContext(ctx context.Context, query string, args []drive
 	}
 	defer mc.finish()
 
-	return mc.Exec(query, dargs, errors.Is(err, errNotSupportReuseQueryBuf))
+	return mc.Exec(query, dargs, reuseQueryBuf)
 }
 
 func (mc *mysqlConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
@@ -596,7 +595,7 @@ func (mc *mysqlConn) PrepareContext(ctx context.Context, query string) (driver.S
 }
 
 func (stmt *mysqlStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
-	dargs, err := namedValueToValue(args)
+	dargs, _, err := namedValueToValue(args)
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +614,7 @@ func (stmt *mysqlStmt) QueryContext(ctx context.Context, args []driver.NamedValu
 }
 
 func (stmt *mysqlStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	dargs, err := namedValueToValue(args)
+	dargs, _, err := namedValueToValue(args)
 	if err != nil {
 		return nil, err
 	}

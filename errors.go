@@ -35,8 +35,6 @@ var (
 	// to trigger a resend.
 	// See https://github.com/go-sql-driver/mysql/pull/302
 	errBadConnNoWrite = errors.New("bad connection")
-
-	errNotSupportReuseQueryBuf = errors.New("not support ReuseQueryBuf")
 )
 
 var defaultLogger = Logger(log.New(os.Stderr, "[mysql] ", log.Ldate|log.Ltime|log.Lshortfile))
