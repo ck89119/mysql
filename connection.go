@@ -326,7 +326,7 @@ func (mc *mysqlConn) Exec(query string, args []driver.Value, reuseQueryBuf bool)
 		query = prepared
 	}
 
-	err := mc.exec(query, reuseQueryBuf)
+	err := mc.execInternal(query, reuseQueryBuf)
 	if err == nil {
 		copied := mc.result
 		return &copied, err
@@ -335,7 +335,11 @@ func (mc *mysqlConn) Exec(query string, args []driver.Value, reuseQueryBuf bool)
 }
 
 // Internal function to execute commands
-func (mc *mysqlConn) exec(query string, reuseQueryBuf bool) error {
+func (mc *mysqlConn) exec(query string) error {
+	return mc.execInternal(query, false)
+}
+
+func (mc *mysqlConn) execInternal(query string, reuseQueryBuf bool) error {
 	handleOk := mc.clearResult()
 	// Send command
 	if reuseQueryBuf {
