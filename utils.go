@@ -819,7 +819,8 @@ func namedValueToValue(named []driver.NamedValue) ([]driver.Value, error) {
 	dargs := make([]driver.Value, len(named))
 	for n, param := range named {
 		if param.Name == ReuseQueryBuf {
-			return nil, errNotSupportReuseQueryBuf
+			dargs[0] = param.Value
+			return dargs, errNotSupportReuseQueryBuf
 		}
 		if len(param.Name) > 0 {
 			// TODO: support the use of Named Parameters #561

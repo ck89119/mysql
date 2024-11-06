@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 type mysqlConn struct {
@@ -326,7 +325,12 @@ func (mc *mysqlConn) Exec(query string, args []driver.Value, reuseQueryBuf bool)
 		query = prepared
 	}
 
-	err := mc.execInternal(query, reuseQueryBuf)
+	var err error
+	if reuseQueryBuf {
+		err = mc.execBytes(args[0].([]byte))
+	} else {
+		err = mc.exec(query)
+	}
 	if err == nil {
 		copied := mc.result
 		return &copied, err
@@ -336,20 +340,38 @@ func (mc *mysqlConn) Exec(query string, args []driver.Value, reuseQueryBuf bool)
 
 // Internal function to execute commands
 func (mc *mysqlConn) exec(query string) error {
-	return mc.execInternal(query, false)
-}
-
-func (mc *mysqlConn) execInternal(query string, reuseQueryBuf bool) error {
 	handleOk := mc.clearResult()
 	// Send command
-	if reuseQueryBuf {
-		if err := mc.writeCommandPacketBytes(comQuery, unsafe.Slice(unsafe.StringData(query), len(query))); err != nil {
-			return mc.markBadConn(err)
+	if err := mc.writeCommandPacketStr(comQuery, query); err != nil {
+		return mc.markBadConn(err)
+	}
+
+	// Read Result
+	resLen, err := handleOk.readResultSetHeaderPacket()
+	if err != nil {
+		return err
+	}
+
+	if resLen > 0 {
+		// columns
+		if err := mc.readUntilEOF(); err != nil {
+			return err
 		}
-	} else {
-		if err := mc.writeCommandPacketStr(comQuery, query); err != nil {
-			return mc.markBadConn(err)
+
+		// rows
+		if err := mc.readUntilEOF(); err != nil {
+			return err
 		}
+	}
+
+	return handleOk.discardResults()
+}
+
+func (mc *mysqlConn) execBytes(query []byte) error {
+	handleOk := mc.clearResult()
+	// Send command
+	if err := mc.writeCommandPacketBytes(comQuery, query); err != nil {
+		return mc.markBadConn(err)
 	}
 
 	// Read Result
