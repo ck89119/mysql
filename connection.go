@@ -313,24 +313,26 @@ func (mc *mysqlConn) Exec(query string, args []driver.Value, reuseQueryBuf bool)
 		mc.log(ErrInvalidConn)
 		return nil, driver.ErrBadConn
 	}
-	if len(args) != 0 {
-		if !mc.cfg.InterpolateParams {
-			return nil, driver.ErrSkip
-		}
-		// try to interpolate the parameters to save extra roundtrips for preparing and closing a statement
-		prepared, err := mc.interpolateParams(query, args)
-		if err != nil {
-			return nil, err
-		}
-		query = prepared
-	}
 
 	var err error
 	if reuseQueryBuf {
 		err = mc.execBytes(args[0].([]byte))
 	} else {
+		if len(args) != 0 {
+			if !mc.cfg.InterpolateParams {
+				return nil, driver.ErrSkip
+			}
+			// try to interpolate the parameters to save extra roundtrips for preparing and closing a statement
+			prepared, err := mc.interpolateParams(query, args)
+			if err != nil {
+				return nil, err
+			}
+			query = prepared
+		}
+
 		err = mc.exec(query)
 	}
+
 	if err == nil {
 		copied := mc.result
 		return &copied, err
