@@ -13,11 +13,13 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 type mysqlConn struct {
@@ -307,7 +309,7 @@ func (mc *mysqlConn) interpolateParams(query string, args []driver.Value) (strin
 	return string(buf), nil
 }
 
-func (mc *mysqlConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+func (mc *mysqlConn) Exec(query string, args []driver.Value, reuseQueryBuf bool) (driver.Result, error) {
 	if mc.closed.Load() {
 		mc.log(ErrInvalidConn)
 		return nil, driver.ErrBadConn
@@ -324,7 +326,7 @@ func (mc *mysqlConn) Exec(query string, args []driver.Value) (driver.Result, err
 		query = prepared
 	}
 
-	err := mc.exec(query)
+	err := mc.exec(query, reuseQueryBuf)
 	if err == nil {
 		copied := mc.result
 		return &copied, err
@@ -333,11 +335,17 @@ func (mc *mysqlConn) Exec(query string, args []driver.Value) (driver.Result, err
 }
 
 // Internal function to execute commands
-func (mc *mysqlConn) exec(query string) error {
+func (mc *mysqlConn) exec(query string, reuseQueryBuf bool) error {
 	handleOk := mc.clearResult()
 	// Send command
-	if err := mc.writeCommandPacketStr(comQuery, query); err != nil {
-		return mc.markBadConn(err)
+	if reuseQueryBuf {
+		if err := mc.writeCommandPacketBytes(comQuery, unsafe.Slice(unsafe.StringData(query), len(query))); err != nil {
+			return mc.markBadConn(err)
+		}
+	} else {
+		if err := mc.writeCommandPacketStr(comQuery, query); err != nil {
+			return mc.markBadConn(err)
+		}
 	}
 
 	// Read Result
@@ -527,7 +535,7 @@ func (mc *mysqlConn) QueryContext(ctx context.Context, query string, args []driv
 
 func (mc *mysqlConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	dargs, err := namedValueToValue(args)
-	if err != nil {
+	if err != nil && !errors.Is(err, errNotSupportReuseQueryBuf) {
 		return nil, err
 	}
 
@@ -536,7 +544,7 @@ func (mc *mysqlConn) ExecContext(ctx context.Context, query string, args []drive
 	}
 	defer mc.finish()
 
-	return mc.Exec(query, dargs)
+	return mc.Exec(query, dargs, errors.Is(err, errNotSupportReuseQueryBuf))
 }
 
 func (mc *mysqlConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
